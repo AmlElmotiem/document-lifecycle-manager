@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "document-lifecycle-manager"
+version = "0.1.0"
+description = "A regulated-document workflow engine (draft -> review -> approval -> release -> obsolete) with enforced segregation of duties and a full audit trail, modeling the kind of process logic behind PLM document control (e.g. ISO 13485 Sec. 4.2.4)"
+requires-python = ">=3.9"
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
