@@ -44,12 +44,24 @@ class Document:
     revision: int = 1
     previous_revision_id: str | None = None
 
+    # "internal_note" is the loosest type (1 reviewer, no QM signoff) --
+    # a safe default so existing callers that don't care about document
+    # types don't have to specify one.
+    doc_type: str = "internal_note"
+
     state: DocumentState = DocumentState.DRAFT
     reviewers: list[str] = field(default_factory=list)
     approver: str | None = None
     review_decisions: dict[str, bool] = field(default_factory=dict)
 
+    qm_approver: str | None = None
+    qm_signoff_done: bool = False
+
     history: list[AuditEntry] = field(default_factory=list)
+    # Untyped here (kept a plain list) to avoid models.py depending on
+    # notifications.py's Notification type -- workflow.py, which
+    # already imports both, is what actually populates this.
+    notifications_sent: list = field(default_factory=list)
 
     def __post_init__(self) -> None:
         self.history.append(

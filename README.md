@@ -24,15 +24,35 @@ logic as testable code, rather than only describing it conceptually.
   immutable, timestamped record of one state change).
 - **`workflow.py`** — the actual state machine, one function per
   transition (`submit_for_review`, `record_review`, `approve`,
-  `release`, `obsolete`, `new_revision`). Every function either
-  performs the transition and logs it, or raises `WorkflowError` with
-  a specific reason — there is no way to skip a step or bypass a rule
-  through this module.
+  `qm_signoff`, `release`, `obsolete`, `new_revision`). Every function
+  either performs the transition and logs it, or raises
+  `WorkflowError` with a specific reason — there is no way to skip a
+  step or bypass a rule through this module.
+- **`document_types.py`** — not every document needs the same rigor: a
+  construction drawing requires 2 reviewers plus a separate QM
+  signoff before release; an internal note only needs 1 reviewer and
+  no QM step. `release()` is blocked until QM signoff is recorded, for
+  types that require it.
+- **`notifications.py`** — the "digitize a paper process" piece: every
+  transition automatically generates the notifications the next
+  responsible person would need (a reviewer being assigned, QM being
+  asked to sign off, the author being told their document shipped),
+  instead of relying on someone to remember to forward a form.
+- **`analytics.py`** — using nothing but the audit trail every
+  document already keeps, computes how long documents actually spend
+  in each state (`time_in_each_state`, `bottleneck_report`) and
+  renders that as a Mermaid flowchart (`mermaid_flowchart`) with the
+  slowest step highlighted — the "trace a document's path and find
+  where it's slow" idea, built from real data instead of drawn by hand.
 - **`report.py`** — renders a document's full audit trail as a
   readable compliance-style report.
 - **`scripts/demo.py`** — walks one document through a realistic
   scenario, including a rejection and rework loop (not just the
   straight-line happy path), and prints the final audit trail.
+- **`scripts/demo_notifications_and_bottlenecks.py`** — runs several
+  construction drawings through the full workflow (with QM signoff),
+  prints the notifications that went out, then reports which step was
+  the slowest across all of them and prints a Mermaid flowchart.
 
 ## Enforced rules
 
@@ -48,13 +68,18 @@ logic as testable code, rather than only describing it conceptually.
 - Every transition is appended to an immutable history: timestamp,
   previous state, new state, who did it, and an optional comment —
   nothing can be changed or deleted after the fact.
+- The minimum number of reviewers, and whether a separate QM signoff
+  is required before release, depend on the document's **type** —
+  a construction drawing is held to a higher bar than an internal
+  note (see `document_types.py`).
 
 ## Getting started
 
 ```bash
 pip install -e ".[dev]"
-pytest -v                # 18 tests
-python scripts/demo.py   # a full scenario, including a rejection/rework loop
+pytest -v                                        # 36 tests
+python scripts/demo.py                            # a full scenario, including a rejection/rework loop
+python scripts/demo_notifications_and_bottlenecks.py  # notifications + bottleneck report + Mermaid flowchart
 ```
 
 ## Limitations
@@ -67,14 +92,20 @@ python scripts/demo.py   # a full scenario, including a rejection/rework loop
   obsolete; the caller has to do that explicitly (documented in the
   function's docstring) since the new Document object only carries
   the old revision's ID, not a live reference to it.
-- Single approver and a fixed reviewer list per submission — no
-  support for parallel approval chains or conditional routing based
-  on document type, which a real PLM system typically needs.
+- Notifications are recorded as data (`Notification` objects on
+  `document.notifications_sent`), not actually sent anywhere — no real
+  mail server in this environment. The integration point where a real
+  system would plug in email/Slack sending is exactly where
+  `notifications_for_transition()` is called, in `workflow._log()`.
+- Only three document types are defined (`drawing`, `test_report`,
+  `internal_note`); adding a new type currently means editing
+  `DOCUMENT_TYPES` in code rather than configuring it at runtime.
 
 ## Roadmap
 
 - A minimal persistence layer (e.g. SQLite) so documents and their
   history survive between runs
-- Role-based document-type routing (different document types require
-  different reviewer/approver sets)
-- A small CLI or web view for browsing the audit trail interactively
+- Actually send notifications somewhere real (e.g. write to a local
+  file or hook up SMTP) instead of only recording them as data
+- A small CLI or web view for browsing the audit trail and bottleneck
+  report interactively
