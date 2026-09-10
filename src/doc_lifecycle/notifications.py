@@ -37,7 +37,7 @@ def notifications_for_transition(
         for reviewer in document.reviewers:
             notes.append(Notification(
                 recipient=reviewer,
-                subject=f"Review angefragt: {document.doc_id} – {document.title}",
+                subject=f"Review angefragt: {document.doc_id} - {document.title}",
                 reason="Sie wurden als Pruefer/in eingetragen.",
             ))
 

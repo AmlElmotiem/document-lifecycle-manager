@@ -12,6 +12,14 @@ from datetime import timedelta
 from .models import Document, DocumentState, utcnow
 
 
+# RELEASED and OBSOLETE are resting states, not processing steps a
+# document is "waiting" to get out of -- once released, it just stays
+# released. Measuring elapsed-time-to-now for the trailing (still
+# open) segment only makes sense for a state a document could still
+# be actively stuck in.
+_TERMINAL_STATES = {DocumentState.RELEASED, DocumentState.OBSOLETE}
+
+
 def time_in_each_state(document: Document) -> dict[DocumentState, timedelta]:
     """From one document's audit trail, compute how long it has spent
     (so far) in each state it has passed through. A document that
@@ -22,7 +30,12 @@ def time_in_each_state(document: Document) -> dict[DocumentState, timedelta]:
     for i, entry in enumerate(entries):
         state = entry.to_state
         start = entry.timestamp
-        end = entries[i + 1].timestamp if i + 1 < len(entries) else utcnow()
+        if i + 1 < len(entries):
+            end = entries[i + 1].timestamp
+        elif state in _TERMINAL_STATES:
+            end = start  # nothing further to wait for -- contributes zero
+        else:
+            end = utcnow()
         durations[state] = durations.get(state, timedelta()) + (end - start)
     return durations
 
@@ -44,6 +57,14 @@ def bottleneck_report(documents: list[Document]) -> dict[DocumentState, timedelt
 
 def format_duration(duration: timedelta) -> str:
     total_seconds = duration.total_seconds()
+    if total_seconds < 1:
+        # Sub-second durations happen constantly in a demo/test run
+        # (no real waiting between steps) -- rounding straight to "0s"
+        # here made an early version of the bottleneck report look
+        # completely broken (everything "0s") even though the
+        # underlying timing was correct; showing milliseconds instead
+        # makes it legible in exactly that situation.
+        return f"{total_seconds * 1000:.0f}ms"
     if total_seconds < 60:
         return f"{total_seconds:.0f}s"
     if total_seconds < 3600:

@@ -45,8 +45,11 @@ def main() -> None:
 
     print("\n=== Running several drawings through the process ===\n")
     random.seed(1)
+    # Review sits in someone's queue much longer than QM signoff does,
+    # by design -- so the report below should clearly point at
+    # IN_REVIEW as the bottleneck, not just show noise.
     documents = [
-        run_one_drawing(f"DRW-{100 + i}", review_delay_s=random.uniform(0.02, 0.15), qm_delay_s=random.uniform(0.01, 0.03))
+        run_one_drawing(f"DRW-{100 + i}", review_delay_s=random.uniform(0.8, 2.0), qm_delay_s=random.uniform(0.05, 0.15))
         for i in range(1, 8)
     ]
 

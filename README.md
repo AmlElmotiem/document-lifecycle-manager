@@ -82,6 +82,38 @@ python scripts/demo.py                            # a full scenario, including a
 python scripts/demo_notifications_and_bottlenecks.py  # notifications + bottleneck report + Mermaid flowchart
 ```
 
+## What we found (the honest part)
+
+Running the new demo script for the first time surfaced three real
+issues, none of which the (still-passing) unit tests had caught:
+
+1. **Mojibake in the terminal.** A notification subject used an en
+   dash (`–`); on this Windows setup it printed as `�`. Fixed by using
+   a plain ASCII hyphen instead — a small thing, but it's the kind of
+   detail that makes a report look broken even when the logic behind
+   it is fine.
+2. **The bottleneck report showed "0s" for every single state.** Not a
+   logic bug — `format_duration()` rounded anything under a minute to
+   the nearest whole second, and the demo's artificial delays
+   (tens to low-hundreds of milliseconds) all rounded down to zero.
+   The report was technically correct and completely useless at the
+   same time. Fixed by adding a millisecond-resolution branch to
+   `format_duration()` for sub-second durations.
+3. **After fixing #2, "released" showed up as the *slowest* step —
+   backwards.** `time_in_each_state()` measured the document's current
+   (last) state up to `utcnow()`, which is the right thing to do for a
+   document still genuinely stuck somewhere (e.g. still `IN_REVIEW`).
+   But `RELEASED` and `OBSOLETE` are resting states, not processing
+   steps a document is "waiting" to leave — so that same "measure to
+   now" logic just picked up however much wall-clock time had passed
+   since the demo happened to call `release()`, which has nothing to
+   do with the actual process. Fixed by giving terminal states a
+   duration of zero for that trailing, still-open segment instead of
+   measuring them against `utcnow()`. After the fix, the report
+   correctly points at `IN_REVIEW` as the bottleneck in the demo data
+   (which was deliberately seeded with a longer review delay than QM
+   signoff delay, specifically to check this).
+
 ## Limitations
 
 - In-memory only — no persistence layer (database, file storage);

@@ -46,6 +46,25 @@ def test_revisits_to_the_same_state_are_summed():
     assert durations[DocumentState.DRAFT] == timedelta(seconds=130)
 
 
+def test_terminal_state_does_not_accumulate_time_since_the_report_ran():
+    # Only two entries: created straight into RELEASED (not a normal
+    # sequence, but it isolates exactly what's being tested), then a
+    # real Python-side delay before the report call.
+    entries = [
+        AuditEntry(timestamp=_t(0), from_state=None, to_state=DocumentState.DRAFT, actor="Aml"),
+        AuditEntry(timestamp=_t(10), from_state=DocumentState.DRAFT, to_state=DocumentState.RELEASED, actor="Dana"),
+    ]
+    doc = _document_with_history(entries)
+
+    durations = time_in_each_state(doc)
+
+    # RELEASED is the trailing (still "open") entry here, but it's a
+    # terminal state -- it must NOT pick up (utcnow() - _t(10)), which
+    # would be a huge, non-deterministic value reflecting wall-clock
+    # time since 2026-01-01, not anything about the document itself.
+    assert durations[DocumentState.RELEASED] == timedelta(seconds=0)
+
+
 def test_bottleneck_report_averages_across_documents():
     doc1 = _document_with_history([
         AuditEntry(timestamp=_t(0), from_state=None, to_state=DocumentState.DRAFT, actor="A"),
@@ -65,6 +84,7 @@ def test_bottleneck_report_averages_across_documents():
 
 
 def test_format_duration_picks_sensible_units():
+    assert format_duration(timedelta(milliseconds=150)) == "150ms"
     assert format_duration(timedelta(seconds=30)) == "30s"
     assert format_duration(timedelta(minutes=5)) == "5.0min"
     assert format_duration(timedelta(hours=2)) == "2.0h"
